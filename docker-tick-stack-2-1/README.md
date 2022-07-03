@@ -1,16 +1,14 @@
 # tick-stack-chronograf
 
-To setup your dev environment : 
-
-```
+1. 部署
+```shell script
 docker-compose up
 ```
 
-Then go to your local chronograf http://localhost:8888
-
-In chronograf setup the influxdb and kapacitor connection strings with their full local ip
-* http://a.b.c.d:8086 for influxdb
-* http://a.b.c.d:9092 for kapacitor
+2. 然后访问本地 chronograf，地址 http://localhost:8888
+在 chronograf 中设置 influxdb 和 kapacitor 连接字符串，连接字符串是它们的完全本地IP，例如：
+- http://a.b.c.d:8086 for influxdb
+- http://a.b.c.d:9092 for kapacitor
 
 See https://www.youtube.com/watch?v=dk7ZdcNsrKE for a demo video
 
