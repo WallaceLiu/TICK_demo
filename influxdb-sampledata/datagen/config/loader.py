@@ -1,5 +1,5 @@
 from . import default_config
-#import yaml
+# import yaml
 import logging
 import argparse
 import collections
@@ -11,6 +11,7 @@ class ObjectView(object):
     """
     Creates an object out of a dictionary
     """
+
     def __init__(self, d):
         self.__dict__ = d
 
@@ -136,7 +137,6 @@ def parse_args(args=sys.argv[1:]):
     parser.add_argument('-v', '--verbose', action='count', default=argparse.SUPPRESS,
                         help="Set verbosity level. Increase verbosity by adding a v: -v -vv -vvv (default: 0)")
     parser.add_argument('--version', action="store_true", help="Show version")
-
 
     cli_args = parser.parse_args(args)
     # Convert config from argparse Namespace to dict
