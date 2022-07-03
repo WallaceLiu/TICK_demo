@@ -1,0 +1,9 @@
+CMakeFiles
+Testing
+_deps
+
+/*build*/
+/.idea/
+/examples/experiments.cpp
+*.DS_Store
+*.pytest_cache

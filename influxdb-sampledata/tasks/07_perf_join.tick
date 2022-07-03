@@ -1,0 +1,26 @@
+// Get ack out stream of data
+var ack_out = stream
+    |from()
+        .measurement('oeg.ack-out.sample')
+        .groupBy(*)
+
+// Get tor out stream of data
+var tor_out = stream
+    |from()
+        .measurement('oeg.tor-out.sample')
+        .groupBy(*)
+
+// Join incomming messages and outgoing messages
+tor_out
+    |join(ack_out)
+        .as('tor_out', 'ack_out')
+        .tolerance(100ms)
+    //Calculate latency
+    |eval(lambda: "tor_out.tor_out" - "ack_out.oeg_in")
+        // Give the resulting field a name
+        .as('latency')
+    |influxDBOut()
+        .database('trading')
+        .retentionPolicy('rp_unit')
+        .measurement('oeg.latency.sample')
+        .precision('ns')

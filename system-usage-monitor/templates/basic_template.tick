@@ -1,0 +1,21 @@
+var measurement = 'cpu'
+
+var threshold int
+
+var log_file = '/tmp/alerts.log'
+
+var outdb = 'mydb'
+
+var alert_measurement = 'kapactor_alerts'
+
+stream
+    |from()
+        .measurement(measurement)
+    |alert()
+         .crit(lambda: "usage_idle" <  threshold)
+         .log(log_file)
+    |influxDBOut()
+         .database(outdb)
+         .measurement(alert_measurement)
+         .tag('kapacitor', 'true')
+         .tag('version', '0.2')

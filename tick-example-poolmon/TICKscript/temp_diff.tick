@@ -1,0 +1,25 @@
+var sensor1 = stream
+    |from()
+	    .measurement('mqtt_consumer')
+		.where(lambda: "topic" == 'mydevice/sensor1')
+	//|log()
+
+var sensor2 = stream
+    |from()
+	    .measurement('mqtt_consumer')
+		.where(lambda: "topic" == 'mydevice/sensor2')
+	//|log()
+
+sensor1
+    |join(sensor2)
+	    .as('sensor1', 'sensor2')
+		.tolerance(2s)
+	|eval(lambda: "sensor2.value" - "sensor1.value")
+	    .as('diff')
+    |log()
+    |influxDBOut()
+        .database('telegraf')
+        .measurement('diff_sensor2_sensor1')
+        //.buffer(1)
+        // .flushInterval(1s)
+

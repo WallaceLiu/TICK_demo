@@ -1,0 +1,45 @@
+version: '3.7'
+
+services:
+
+  # Define an Nginx service
+  nginx:
+    image: nginx:1.17.10-alpine
+    ports:
+      - 80:80
+      - 8080:8080
+    volumes:
+      - ./docker/nginx/conf.d/nginx_status.conf:/etc/nginx/conf.d/nginx_status.conf:ro
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+
+  # Define a Rsyslog service
+  rsyslog:
+    # This builds an Alpine Linux image with rsyslog and rsyslog-tls installed.
+    build: docker/rsyslog
+    image: rsyslog:8.1911-alpine
+    volumes:
+      - ./docker/rsyslog/rsyslog.conf:/etc/rsyslog.conf:ro
+
+  # Define a Telegraf service
+  telegraf:
+    image: telegraf:1.14.1-alpine
+    volumes:
+      - ./docker/telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+
+  # Define an InfluxDB service
+  influxdb:
+    image: influxdb:1.8.0-alpine
+
+  # Define a Chronograf service
+  chronograf:
+    image: chronograf:1.8.2-alpine
+    command: [chronograf, --kapacitor-url=http://kapacitor:9092, --influxdb-url=http://influxdb:8086]
+    ports:
+      - 8888:8888
+
+  # Define a Kapacitor service
+  kapacitor:
+    image: kapacitor:1.5.4-alpine
+    environment:
+      KAPACITOR_HOSTNAME: kapacitor
+      KAPACITOR_INFLUXDB_0_URLS_0: http://influxdb:8086
