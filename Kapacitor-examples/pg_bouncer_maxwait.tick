@@ -1,0 +1,19 @@
+dbrp "pgbouncer"."autogen"
+
+var data = stream
+    |from()
+        .measurement('pgbouncer_pools')
+        .groupBy('db','user')
+data
+    |alert()
+        // critique a  300 (ms)
+	// pas sur que ça sois en ms
+        .crit(lambda: "maxwait" > 300)
+        // formatage du message
+	.message('[{{ index .tags "DB" }} ], {{ index .tags "user" }}: Maxwait  {{ index .tags "maxwait" }}')
+        .email()
+data
+    |deadman(100.0,15m)
+	.message('No data for {{ index .tags "DB" }}')
+	.email()
+

@@ -1,0 +1,42 @@
+var callsign = 'available-disk-space'
+
+var measurement = 'netdata.disk_space._.avail'
+
+var where_filter = lambda: "role" =~ /prod*/
+
+var window = 10m
+
+var frequency = 5m
+
+var warntxt = 'is low ({{ index .Fields "mean_mb" | printf "%0.1f"}} MB) since last ' + string(window) + ' !'
+
+var warnmsg = '{{ .Level }}: ' + callsign + ' on {{ .ID }} ' + warntxt
+
+var back2normalmsg = '{{ .Level }}: ' + callsign + ' on {{ .ID }} is back to normal :)'
+
+var slack_channel = '#infra-watcher-bot'
+
+var mailinglist = ['gilfoyle@svalley.com', 'dinesh@svalley.com', 'yang@svalley.com']
+
+stream
+    |from()
+        .measurement(measurement)
+        .where(where_filter)
+        .groupBy('host')
+    |window()
+        .period(window)
+        .every(frequency)
+    |mean('value')
+    |eval(lambda: "mean" * 1024.0)
+        .as('mean_mb')
+    |alert()
+        .id('{{ index .Tags "host" }}')
+        .warn(lambda: "mean_mb" < 256)
+        .crit(lambda: "mean_mb" < 120)
+        .stateChangesOnly()
+        .message('{{ if eq .Level "OK" }}' + back2normalmsg + '{{ else }}' + warnmsg + '{{ end }}')
+        .details('''<h1>{{ .ID }}</h1> <b>{{ .Message }}</b> ''')
+        .log('/tmp/kapacitor-alerts-disk.log')
+        .slack()
+        .channel(slack_channel)
+        .email(mailinglist)

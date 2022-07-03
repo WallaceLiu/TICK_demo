@@ -1,0 +1,6 @@
+id: kafka-events-handler
+topic: events
+kind: kafka
+options:
+  cluster: default
+  topic: events.json

@@ -1,0 +1,44 @@
+var thirty_warn = 180.0
+
+var thirty_crit = 60.0
+
+var period = 30s
+
+var outputDB = 'chronograf'
+
+var outputRP = 'autogen'
+
+var outputMeasurement = 'alerts'
+
+var triggerType = 'threshold'
+
+var name = 'Disk Check'
+
+var thirty_min_data = batch
+    |query('''SELECT mean("used") as "mean_used",last(total) as total, last(used) as used FROM "telegraf"."autogen"."disk" WHERE "host"='psuedo'  ''')
+        .period(1m)
+        .every(1m)
+        .groupBy(time(30s), 'host', 'path')
+
+var thirty_min_derivative = thirty_min_data
+    |derivative('mean_used')
+        .unit(period)
+        .as('change')
+    |log()
+    |last('change')
+        .as('change')
+    |log()
+    |where(lambda: "change" > 0.0)
+    |eval(lambda: ("total" - "used") / ("change" * 2.0))
+        .as('min_until_full')
+        .keep('change', 'min_until_full')
+    |log()
+
+thirty_min_derivative
+    |alert()
+        .id('{{index .Tags "host"}};{{index .Tags "path"}};{{.TaskName}}')
+        .message('{{.Level}} {{index .Tags "path"}} will reach 100% in {{index .Fields "min_until_full" | printf "%.2f"}} minutes')
+        .warn(lambda: "min_until_full" <= thirty_warn)
+        .crit(lambda: "min_until_full" <= thirty_crit)
+        .stateChangesOnly()
+        .log('/tmp/alert.log')

@@ -1,0 +1,14 @@
+dbrp "qgis"."autogen"
+
+var data = stream
+    |from()
+       .measurement('qgis_log')
+       .where(lambda: "status" == '502' OR "status" == '503' OR "status" == '504' )
+       .groupBy('account','cluster')
+data
+    |alert()
+       //formatage du message
+       .message('Error {{ index .tags "status" }}QGIS on {{ index .tags "account" }}, {{ index .tags "cluster"}}')
+       .email()
+
+

@@ -1,0 +1,17 @@
+dbrp "pgstats"."autogen"
+
+var data = stream
+    |from()
+        .measurement('pgstats_databases')
+        .groupBy('cluster','account')
+data
+    |alert()
+        // critique a  95%
+        .crit(lambda: float("percent_connection_usage") > 95.0)
+        // formatage du message
+	.message('[{{ index .tags "cluster" }} ], {{ index .tags "account" }}: Connexion usage is {{ index .tags "percent_connection_usage" }}')
+        .email()
+data
+    |deadman(100.0,15m)
+        .message('No data for {{ index .tags "cluster" }} , {{ index .tags "database" }}')
+        .email()

@@ -1,0 +1,18 @@
+var slack_channel = '#kapacitoralerts'
+var period = 2s
+var every = 2s
+var data = stream
+|from()
+  .database('ServerStats')
+  .retentionPolicy('default')
+  .measurement('asg_backup')
+|window()
+  .period(period)
+  .every(every)
+|alert()
+  .id('kapacitor/{{ .TaskName }}/{{ .Name }}')
+  .message('{{ .ID }} is at level {{ .Level }}; Server: {{ index .Tags "server"}}; BackupTime: {{ index .Time}}')
+  .crit(lambda: "files" == 0 AND "bytes" == 0)
+  .slack()
+  .channel(slack_channel)
+  .log('/var/tmp/kapacitor/files.log')

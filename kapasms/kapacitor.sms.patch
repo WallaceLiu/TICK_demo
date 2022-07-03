@@ -1,0 +1,565 @@
+diff -uprN kapacitor-1.4.0/alert.go kapacitor/alert.go
+--- kapacitor-1.4.0/alert.go	2017-12-09 01:20:08.000000000 +0800
++++ kapacitor/alert.go	2017-12-15 16:03:03.911086998 +0800
+@@ -395,6 +395,39 @@ func newAlertNode(et *ExecutingTask, n *
+ 		h := et.tm.MQTTService.Handler(c, ctx...)
+ 		an.handlers = append(an.handlers, h)
+ 	}
++
++	//GW
++	for _, f := range n.LjsmsHandlers {
++		c := et.tm.LjsmsService.DefaultHandlerConfig()
++		if f.Project != "" {
++			c.Project = f.Project
++		}
++		if f.Sms != 0 {
++			c.Sms = f.Sms
++		}
++		if f.Mail != 0 {
++			c.Mail = f.Mail
++		}
++		if f.Template != "" {
++			c.Template = f.Template
++		}
++		if f.To != "" {
++			c.To = f.To
++		}
++		if f.Group != "" {
++			c.Group = f.Group
++		}
++		if f.Auth != "" {
++			c.Auth = f.Auth
++		}
++		if f.Phone != "" {
++			c.Phone = f.Phone
++		}
++		h := et.tm.LjsmsService.Handler(c, nil)
++		an.handlers = append(an.handlers, h)
++	}
++
++
+ 	// Parse level expressions
+ 	an.levels = make([]stateful.Expression, alert.Critical+1)
+ 	an.scopePools = make([]stateful.ScopePool, alert.Critical+1)
+diff -uprN kapacitor-1.4.0/pipeline/alert.go kapacitor/pipeline/alert.go
+--- kapacitor-1.4.0/pipeline/alert.go	2017-12-09 01:20:08.000000000 +0800
++++ kapacitor/pipeline/alert.go	2017-12-15 15:00:03.698086998 +0800
+@@ -364,6 +364,11 @@ type AlertNodeData struct {
+ 	// Send alert using SNMPtraps.
+ 	// tick:ignore
+ 	SNMPTrapHandlers []*SNMPTrapHandler `tick:"SnmpTrap" json:"snmpTrap"`
++
++	//GW
++	// Send alert to Ljsms.
++	// tick:ignore
++	LjsmsHandlers []*LjsmsHandler `tick:"Ljsms"`
+ }
+ 
+ func newAlertNode(wants EdgeType) *AlertNode {
+@@ -1619,3 +1624,30 @@ func (h *SNMPTrapHandler) validate() err
+ 	}
+ 	return nil
+ }
++
++//GW
++// Send alert to a Ljsms server.
++// tick:property
++func (n *AlertNodeData) Ljsms() *LjsmsHandler {
++	f := &LjsmsHandler{
++		AlertNodeData: n,
++	}
++	n.LjsmsHandlers = append(n.LjsmsHandlers, f)
++	return f
++}
++
++// tick:embedded:AlertNode.Ljsms
++type LjsmsHandler struct {
++	*AlertNodeData
++
++	// The project for the messages.
++	// Defaults to the project in the configuration if empty.
++	Project string
++	Sms     int64
++	Mail    int64
++	Group   string
++	Auth    string
++	To      string
++	Phone   string
++	Template string
++}
+diff -uprN kapacitor-1.4.0/server/config.go kapacitor/server/config.go
+--- kapacitor-1.4.0/server/config.go	2017-12-09 01:20:08.000000000 +0800
++++ kapacitor/server/config.go	2017-12-14 17:35:57.106086998 +0800
+@@ -53,6 +53,8 @@ import (
+ 	"github.com/influxdata/kapacitor/services/udf"
+ 	"github.com/influxdata/kapacitor/services/udp"
+ 	"github.com/influxdata/kapacitor/services/victorops"
++	//GW
++	"github.com/influxdata/kapacitor/services/ljsms"
+ 	"github.com/pkg/errors"
+ 
+ 	"github.com/influxdata/influxdb/services/collectd"
+@@ -92,6 +94,8 @@ type Config struct {
+ 	Talk      talk.Config      `toml:"talk" override:"talk"`
+ 	Telegram  telegram.Config  `toml:"telegram" override:"telegram"`
+ 	VictorOps victorops.Config `toml:"victorops" override:"victorops"`
++	//GW
++	Ljsms ljsms.Config         `toml:"ljsms" override:"ljsms"`
+ 
+ 	// Discovery for scraping
+ 	Scraper         []scraper.Config          `toml:"scraper" override:"scraper,element-key=name"`
+@@ -156,6 +160,8 @@ func NewConfig() *Config {
+ 	c.SNMPTrap = snmptrap.NewConfig()
+ 	c.Telegram = telegram.NewConfig()
+ 	c.VictorOps = victorops.NewConfig()
++	//GW
++	c.Ljsms = ljsms.NewConfig()
+ 
+ 	c.Reporting = reporting.NewConfig()
+ 	c.Stats = stats.NewConfig()
+@@ -298,6 +304,11 @@ func (c *Config) Validate() error {
+ 		return errors.Wrap(err, "udf")
+ 	}
+ 
++	//GW
++	if err := c.Ljsms.Validate(); err != nil {
++		return err
++	}
++
+ 	// Validate scrapers
+ 	for i := range c.Scraper {
+ 		if err := c.Scraper[i].Validate(); err != nil {
+diff -uprN kapacitor-1.4.0/server/server.go kapacitor/server/server.go
+--- kapacitor-1.4.0/server/server.go	2017-12-09 01:20:08.000000000 +0800
++++ kapacitor/server/server.go	2017-12-14 17:35:57.107086998 +0800
+@@ -66,6 +66,8 @@ import (
+ 	"github.com/influxdata/kapacitor/services/udf"
+ 	"github.com/influxdata/kapacitor/services/udp"
+ 	"github.com/influxdata/kapacitor/services/victorops"
++	//GW
++	"github.com/influxdata/kapacitor/services/ljsms"
+ 	"github.com/influxdata/kapacitor/uuid"
+ 	"github.com/influxdata/kapacitor/waiter"
+ 	"github.com/pkg/errors"
+@@ -244,6 +246,9 @@ func New(c *Config, buildInfo BuildInfo,
+ 	s.appendTalkService()
+ 	s.appendVictorOpsService()
+ 
++	//GW
++	s.appendLjsmsService()
++
+ 	// Append alert service
+ 	s.appendAlertService()
+ 
+@@ -1186,3 +1191,16 @@ func (qe *Queryexecutor) Authorize(u *me
+ func (qe *Queryexecutor) ExecuteQuery(q *influxql.Query, db string, chunkSize int) (<-chan *influxql.Result, error) {
+ 	return nil, errors.New("cannot execute queries against Kapacitor")
+ }
++
++//GW
++func (s *Server) appendLjsmsService() {
++	c := s.config.Ljsms
++	//l := s.LogService.NewLogger("[ljsms] ", log.LstdFlags)
++	srv := ljsms.NewService(c, nil)
++
++	s.TaskMaster.LjsmsService = srv
++	s.AlertService.LjsmsService = srv
++
++	s.SetDynamicService("ljsms", srv)
++	s.AppendService("ljsms", srv)
++}
+diff -uprN kapacitor-1.4.0/services/alert/service.go kapacitor/services/alert/service.go
+--- kapacitor-1.4.0/services/alert/service.go	2017-12-09 01:20:08.000000000 +0800
++++ kapacitor/services/alert/service.go	2017-12-14 17:35:57.108086998 +0800
+@@ -27,6 +27,10 @@ import (
+ 	"github.com/influxdata/kapacitor/services/storage"
+ 	"github.com/influxdata/kapacitor/services/telegram"
+ 	"github.com/influxdata/kapacitor/services/victorops"
++	//GW
++	"log"
++	"github.com/influxdata/kapacitor/services/ljsms"
++
+ 	"github.com/mitchellh/mapstructure"
+ 	"github.com/pkg/errors"
+ )
+@@ -116,6 +120,11 @@ type Service struct {
+ 	VictorOpsService interface {
+ 		Handler(victorops.HandlerConfig, ...keyvalue.T) alert.Handler
+ 	}
++	//GW
++	LjsmsService interface {
++		DefaultHandlerConfig() ljsms.HandlerConfig
++		Handler(ljsms.HandlerConfig, *log.Logger) alert.Handler
++	}
+ }
+ 
+ func NewService(d Diagnostic) *Service {
+@@ -903,6 +912,17 @@ func (s *Service) createHandlerFromSpec(
+ 		}
+ 		h = s.VictorOpsService.Handler(c, ctx...)
+ 		h = newExternalHandler(h)
++	//GW: TODO
++	case "ljsms":
++		c := s.LjsmsService.DefaultHandlerConfig()
++		err = decodeOptions(spec.Options, &c)
++		if err != nil {
++			return handler{}, err
++		}
++		h := s.LjsmsService.Handler(c, nil)
++		//ha = newPassThroughHandler(h)
++		h = newExternalHandler(h)
++
+ 	default:
+ 		err = fmt.Errorf("unsupported action kind %q", spec.Kind)
+ 	}
+diff -uprN kapacitor-1.4.0/services/ljsms/config.go kapacitor/services/ljsms/config.go
+--- kapacitor-1.4.0/services/ljsms/config.go	1970-01-01 08:00:00.000000000 +0800
++++ kapacitor/services/ljsms/config.go	2017-12-15 15:19:36.039086998 +0800
+@@ -0,0 +1,35 @@
++package ljsms
++
++import "errors"
++
++// Config declares the needed configuration options for the service ljsms.
++type Config struct {
++	// Enabled indicates whether the service should be enabled.
++	Enabled  bool   `toml:"enabled" override:"enabled"`
++	// URL of the ljsms server.
++	URL      string `toml:"url" override:"url"`
++	// Project specifies the default project to use for all handlers.
++	Project  string `toml:"project" override:"project"`
++	Sms      int64  `toml:"sms" override:"sms"`
++	Mail     int64  `toml:"mail" override:"mail"`
++	Group    string `toml:"group" override:"group"`
++	Auth     string `toml:"auth" override:"auth"`
++	To       string `toml:"to" override:"to"`
++	Phone    string `toml:"phone" override:"phone"`
++	Template string `toml:"template" override:"template"`
++}
++
++func NewConfig() Config {
++	return Config{}
++}
++
++func (c Config) Validate() error {
++	if c.Enabled && c.URL == "" {
++		return errors.New("must specify the ljsms server url")
++	}
++	//if c.Enabled && c.Project == "" {
++	//	return errors.New("must specify the ljsms project")
++	//}
++
++	return nil
++}
+diff -uprN kapacitor-1.4.0/services/ljsms/service.go kapacitor/services/ljsms/service.go
+--- kapacitor-1.4.0/services/ljsms/service.go	1970-01-01 08:00:00.000000000 +0800
++++ kapacitor/services/ljsms/service.go	2017-12-15 16:01:07.373086998 +0800
+@@ -0,0 +1,271 @@
++package ljsms
++
++import (
++	"bytes"
++	"encoding/json"
++	"fmt"
++	"log"
++	"net/http"
++	"sync/atomic"
++	"errors"
++	"strings"
++
++	"github.com/influxdata/kapacitor/alert"
++)
++
++type Service struct {
++	configValue atomic.Value
++	logger      *log.Logger
++}
++
++const (
++	VERSION     = "1.0"
++	SMS_METHOD  = "sms.sent"
++	MAIL_METHOD = "mail.sent"
++)
++
++type smsParams struct {
++	Content string `json:"content"`
++}
++
++type smsMessage struct {
++	Version  string    `json:"version"`
++	Method   string    `json:"method"`
++	Group    string    `json:"group"`
++	Auth     string    `json:"auth"`
++	Template string    `json:"template"`
++	Phone    string    `json:"phone"`
++	Params   smsParams `json:"params"`
++}
++
++type mailParams struct {
++	To         []string          `json:"to"`
++	Subject    string            `json:"subject"`
++	Body       string            `json:"body"`
++	Attachment []string          `json:"attachment"`
++	Attachbody map[string]string `json:"attachbody"`
++}
++
++type mailMessage struct {
++	Version string     `json:"version"`
++	Method  string     `json:"method"`
++	Group   string     `json:"group"`
++	Auth    string     `json:"auth"`
++	Params  mailParams `json:"params"`
++}
++
++func NewService(c Config, l *log.Logger) *Service {
++	s := &Service{
++		logger: l,
++	}
++	s.configValue.Store(c)
++	return s
++}
++
++func (s *Service) Open() error {
++	// Perform any initialization needed here
++	return nil
++}
++
++func (s *Service) Close() error {
++	// Perform any actions needed to properly close the service here.
++	// For example signal and wait for all go routines to finish.
++	return nil
++}
++
++func (s *Service) Update(newConfig []interface{}) error {
++	if l := len(newConfig); l != 1 {
++		return fmt.Errorf("expected only one new config object, got %d", l)
++	}
++	if c, ok := newConfig[0].(Config); !ok {
++		return fmt.Errorf("expected config object to be of type %T, got %T", c, newConfig[0])
++	} else {
++		s.configValue.Store(c)
++	}
++	return nil
++}
++
++// config loads the config struct stored in the configValue field.
++func (s *Service) config() Config {
++	return s.configValue.Load().(Config)
++}
++
++func ljsmsPost(url string, data []byte) error {
++	r, err := http.Post(url, "application/json", bytes.NewReader(data))
++	if err != nil {
++		fmt.Println("ljsms alert post failed")
++		return err
++	}
++	r.Body.Close()
++	if r.StatusCode != http.StatusOK {
++		fmt.Printf("ljsms alert post http not ok: %d\n", r.StatusCode)
++		return fmt.Errorf("unexpected response code %d from ljsms service", r.StatusCode)
++	}
++	//fmt.Println("ljsms post success")
++
++	return nil
++}
++
++func (s *Service) sendMail(hc HandlerConfig, message, details, edata string) error {
++	c := s.config()
++	if hc.To == "" {
++		fmt.Println("ljsms no mail target")
++		return errors.New("ljsms mail no target")
++	}
++	toarr := strings.Split(hc.To, ",")
++
++	data, err := json.Marshal(mailMessage{
++		Version : VERSION,
++		Method  : MAIL_METHOD,
++		Group   : c.Group,
++		Auth    : c.Auth,
++		Params  : mailParams{
++			To      : toarr, //TODO: set to []
++			Subject : hc.Project,
++			Body    : message,
++			//TODO: attachment
++		},
++	})
++	if err != nil {
++		fmt.Println("ljsms generate data failed")
++		return err
++	}
++
++	//fmt.Println("Send mail data is ", string(data))
++
++	return ljsmsPost(c.URL, data)
++}
++
++func (s *Service) sendSms(hc HandlerConfig, message string) error {
++	c := s.config()
++	data, err := json.Marshal(smsMessage{
++		Version  : VERSION,
++		Method   : SMS_METHOD,
++		Group    : c.Group,
++		Auth     : c.Auth,
++		Template : hc.Template, //TODO: set template
++		Phone    : hc.Phone, //TODO: set phone
++		Params   : smsParams{Content: "project: " + hc.Project + ", message: "+ message},
++	})
++
++	if err != nil {
++		fmt.Println("ljsms generate data failed")
++		return err
++	}
++
++	//fmt.Println("Send sms data is ", string(data))
++
++	return ljsmsPost(c.URL, data)
++}
++
++// Alert sends a message to the specified project.
++func (s *Service) Alert(hc HandlerConfig, message, details, edata string) error {
++	var errMail, errSms error
++
++	fmt.Println("in alert")
++	c := s.config()
++	if !c.Enabled {
++		fmt.Println("ljsms alert not enabled")
++		return errors.New("service is not enabled")
++	}
++	if hc.Mail != 1 && hc.Sms != 1 {
++		fmt.Println("ljsms alert mail or sms should be set")
++		return errors.New("service alert method is not set")
++	}
++
++	if hc.Mail == 1 {
++		fmt.Println("To send mail")
++		errMail = s.sendMail(hc, message, details, edata)
++	}
++	if hc.Sms == 1 {
++		fmt.Println("To send sms")
++		errSms = s.sendSms(hc, message)
++	}
++
++	if errMail != nil || errSms != nil {
++		return errors.New("Post to ljsms service failed")
++	}
++
++	return nil
++}
++
++type HandlerConfig struct {
++	//Project specifies the destination project for the chat messages.
++	Project  string `mapstructure:"project"`
++	Sms      int64  `mapstructure:"sms"`
++	Mail     int64  `mapstructure:"mail"`
++	Group    string `mapstructure:"group"`
++	Auth     string `mapstructure:"auth"`
++	To       string `mapstructure:"to"`
++	Phone    string `mapstructure:"phone"`
++	Template string `mapstructure:"template"`
++}
++
++// handler provides the implementation of the alert.Handler interface for the ljsms service.
++type handler struct {
++	s      *Service
++	c      HandlerConfig
++	logger *log.Logger
++}
++
++// DefaultHandlerConfig returns a HandlerConfig struct with defaults applied.
++func (s *Service) DefaultHandlerConfig() HandlerConfig {
++	// return a handler config populated with the default room from the service config.
++	c := s.config()
++	return HandlerConfig{
++		Project: c.Project,
++	}
++}
++
++// Handler creates a handler from the config.
++func (s *Service) Handler(c HandlerConfig, l *log.Logger) alert.Handler {
++	fmt.Println("ljsms handler")
++	// handlers can operate in differing contexts, as a result a logger is passed
++	// in so that logs from this handler can be correctly associatied with a given context.
++	return &handler{
++		s:      s,
++		c:      c,
++		logger: l,
++	}
++}
++
++// Handle takes an event and posts its message to the ljsms service chat room.
++func (h *handler) Handle(event alert.Event) {
++	edata, err := json.Marshal(event.Data)
++	if err != nil {
++		fmt.Println("marshal event data failed")
++		return
++	}
++
++	if err := h.s.Alert(h.c, event.State.Message, event.State.Details, string(edata)); err != nil {
++		if h.logger != nil {
++			h.logger.Println("E! failed to handle event", err)
++		}
++	}
++}
++
++//TEST
++type testOptions struct {
++	Project string `json:"project"`
++	Message string `json:"message"`
++	Details string `json:"details"`
++	Edata   string `json:"edata"`
++}
++
++func (s *Service) TestOptions() interface{} {
++	c := s.config()
++	return &testOptions{
++		Project: c.Project,
++		Message: "test ljsms message",
++		Details: "test ljsms details",
++		Edata  : "test ljsms edata",
++	}
++}
++
++func (s *Service) Test(o interface{}) error {
++	options, ok := o.(*testOptions)
++	if !ok {
++		return fmt.Errorf("unexpected options type %T", options)
++	}
++	return s.Alert(HandlerConfig{}, options.Message, options.Details, options.Edata)
++}
+diff -uprN kapacitor-1.4.0/task_master.go kapacitor/task_master.go
+--- kapacitor-1.4.0/task_master.go	2017-12-09 01:20:08.000000000 +0800
++++ kapacitor/task_master.go	2017-12-14 17:35:57.109086998 +0800
+@@ -36,6 +36,9 @@ import (
+ 	swarm "github.com/influxdata/kapacitor/services/swarm/client"
+ 	"github.com/influxdata/kapacitor/services/telegram"
+ 	"github.com/influxdata/kapacitor/services/victorops"
++	//GW
++	"github.com/influxdata/kapacitor/services/ljsms"
++
+ 	"github.com/influxdata/kapacitor/tick"
+ 	"github.com/influxdata/kapacitor/tick/stateful"
+ 	"github.com/influxdata/kapacitor/timer"
+@@ -182,6 +185,12 @@ type TaskMaster struct {
+ 		Source(dir string) (sideload.Source, error)
+ 	}
+ 
++	//GW
++	LjsmsService interface {
++		DefaultHandlerConfig() ljsms.HandlerConfig
++		Handler(ljsms.HandlerConfig, *log.Logger) alert.Handler
++	}
++
+ 	Commander command.Commander
+ 
+ 	DefaultRetentionPolicy string
+@@ -273,6 +282,10 @@ func (tm *TaskMaster) New(id string) *Ta
+ 	n.K8sService = tm.K8sService
+ 	n.Commander = tm.Commander
+ 	n.SideloadService = tm.SideloadService
++
++	//GW
++	n.LjsmsService = tm.LjsmsService
++
+ 	return n
+ }
+ 

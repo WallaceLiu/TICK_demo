@@ -1,0 +1,23 @@
+var data = stream
+	|from()
+		.measurement('access')
+	|where(lambda: "status" == 502)
+	|groupBy('url_domain', 'l7_ip', 'ups_addr')
+	|window()
+		.period(5s)
+		.every(5s)
+		.align()
+	|count('status')
+
+var alert = data
+	|alert()
+	.message('[Access log 502 count alert] count:{{index .Fields "count"}}, url_domain:{{index .Tags "url_domain"}}, l7_ip:{{index .Tags "l7_ip"}}, ups_addr:{{index .Tags "ups_addr"}}')
+	.details('')
+	.warn(lambda: "count" > 1)
+	.ljsms()
+		.project('access_test')
+		.sms(1)
+			.phone('your_phone')
+			.template('your_template')
+		.mail(1)
+			.to('your_mail')

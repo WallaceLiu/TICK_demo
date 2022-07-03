@@ -1,0 +1,17 @@
+dbrp "pgbouncer"."autogen"
+
+var data = stream
+    |from()
+        .measurement('pgbouncer_databases')
+        .groupBy('cluster','database')
+data
+    |deadman(100.0,15m)
+        .message('No data for {{ index .Tags "cluster" }} , {{ index .Tags      "account" }')
+        .email()
+data
+    |alert()
+        // critique a  95%
+        .crit(lambda: (float("current_connections") / float("max_connections")*100.0) > 95)
+        // formatage du message
+	.message('[{{ index .Tags "cluster" }} ], {{ index .Tags "database" }}: Connexion usage is high "}}')
+        .email()

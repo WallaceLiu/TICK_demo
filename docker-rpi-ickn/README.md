@@ -1,0 +1,1 @@
+inluxdb + chronograf + kapacitor + nginx on raspberry

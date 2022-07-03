@@ -1,0 +1,13 @@
+{
+  "name": "tick-courseware",
+  "version": "1.0.0",
+  "description": "<p align=\"right\"><i><a href=\"https://www.linkedin.com/in/vkhazin\" target=\"_blank\">by Vlad Khazin</a></i></p>",
+  "dependencies": {
+    "gitbook": "^3.2.2",
+    "gitbook-plugin-footer": "^0.0.6",
+    "gitbook-plugin-ga": "^2.0.0"
+  },
+  "devDependencies": {},
+  "author": "Vlad Khazin",
+  "license": "by-nc-sa"
+}

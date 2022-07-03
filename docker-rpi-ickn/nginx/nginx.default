@@ -1,0 +1,20 @@
+server {
+  root /var/www/html;
+
+  listen 8080 default_server;
+  ssl on;
+
+  #openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /var/lib/docker-tickng/etc/nginx/ssl/nginx-selfsigned.key -out /var/lib/docker-tickng/etc/nginx/ssl/nginx-selfsigned.crt
+  ssl_certificate /etc/nginx/ssl/nginx-selfsigned.crt;
+  ssl_certificate_key /etc/nginx/ssl/nginx-selfsigned.key;
+
+  access_log            /var/log/nginx/influxdb.access.log;
+
+  location / {
+
+    proxy_set_header    Host $host;
+    proxy_pass          http://influxdb:8086;
+    proxy_redirect      off;
+  }
+}
+

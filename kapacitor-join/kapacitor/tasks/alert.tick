@@ -1,0 +1,38 @@
+dbrp "metrics"."autogen"
+
+var inbound = batch
+  |query('''
+    SELECT max(value) AS "value" 
+    FROM "metrics"."autogen".jobsdb_events
+    WHERE "dir" = 'in'
+  ''')
+    .period(5m)
+    .every(10s)
+    .align()
+    .groupBy(time(5m))
+    .fill('previous')
+  |last('value')
+    .as('value')
+
+var outbound = batch
+  |query('''
+    SELECT max(value) as "value"
+    FROM "metrics"."autogen".jobsdb_events
+    WHERE "dir" = 'out'
+  ''')
+    .period(30m)
+    .every(10s)
+    .align()
+    .groupBy(time(5m))
+    .fill(0.0)
+  |last('value')
+    .as('value')
+
+inbound
+  |join(outbound)
+    .as('in', 'out')
+    .fill(0.0)
+  |alert()
+    .crit(lambda: "in.value" > 0.0 AND "out.value" == 0.0)
+    .critReset(lambda: float("out.value") > 0.0)
+    .log('/var/lib/kapacitor/log/alerts.log')

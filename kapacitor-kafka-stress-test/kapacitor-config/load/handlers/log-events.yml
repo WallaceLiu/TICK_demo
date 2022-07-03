@@ -1,0 +1,6 @@
+id: log-events-handler
+topic: events
+kind: log
+options:
+  path: '/tmp/alerts.log'
+  mode: 0644

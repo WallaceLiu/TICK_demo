@@ -1,0 +1,27 @@
+version: "3.0"
+
+services:
+  grafana:
+    image: grafana/grafana:8.3.3
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - 9991:3000
+    restart: always
+  influxdb:
+    image: influxdb:1.7.6-alpine
+    volumes:
+      - ./influxdb/initdb.d:/docker-entrypoint-initdb.d
+    ports:
+      - 9992:8086
+    restart: always
+  kapacitor:
+    image: kapacitor:1.5.2-alpine
+    volumes:
+      - ./kapacitor/log:/var/lib/kapacitor/log
+      - ./kapacitor/tasks:/var/lib/kapacitor/tasks
+    environment:
+      - KAPACITOR_INFLUXDB_0_URLS_0=http://influxdb:8086
+    ports:
+      - 9993:9092
+    restart: always

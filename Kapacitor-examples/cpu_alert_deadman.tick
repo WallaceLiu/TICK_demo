@@ -1,0 +1,20 @@
+var period = 5s
+var every = 5s
+
+var data = stream
+  |from()
+    .measurement('cpu')
+    .groupBy('host')
+    .where(lambda: "cpu" == 'cpu-total')
+  |window()
+    .period(period)
+    .every(every)
+  |mean('usage_user')
+    .as('stat')
+
+// Trigger critical alert if the throughput drops below 0 value per 30s and checked every 10s.
+var alert = data
+  |deadman(0.0, 30s)
+    .message('host: {{ index .Tags "host"}} ip: {{ index .Tags "ip"}}')
+    .log('/tmp/cpu_alert_log.txt')
+    .email()

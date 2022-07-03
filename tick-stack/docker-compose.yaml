@@ -1,0 +1,56 @@
+version: '2'
+
+services:
+  influxdb:
+    # Full tag list: https://hub.docker.com/r/library/influxdb/tags/
+    container_name: tick_influxdb
+    image: influxdb:latest
+    ports:
+      - 8086:8086
+      - "8082:8082"
+      # UDP Port
+      - "8089:8089"
+    volumes:
+      - /opt/influxdb:/var/lib/influxdb
+      - /opt/influxdb:/etc/influxdb/
+    restart: on-failure
+
+  telegraf:
+    # Full tag list: https://hub.docker.com/r/library/telegraf/tags/
+    container_name: tick_telegraph
+    image: telegraf:latest
+    volumes:
+      # Mount for telegraf configuration
+      - /opt/telegraf:/etc/telegraf/
+      # Mount for Docker API access
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      HOSTNAME: "telegraf-getting-started"
+    depends_on:
+      - influxdb
+
+  kapacitor:
+    # Full tag list: https://hub.docker.com/r/library/kapacitor/tags/
+    container_name: tick_kapacitor
+    image: kapacitor:latest
+    volumes:
+      - /opt/kapacitor/data/:/var/lib/kapacitor
+      - /opt/kapacitor/config/:/etc/kapacitor/
+    ports:
+      # The API for Kapacitor is served on port 9092
+      - "9095:9095"
+
+  chronograf:
+    container_name: tick_chronograf
+    image: chronograf:latest
+    ports:
+      - 192.168.1.22:8888:8888
+    volumes:
+      - /opt/chronograf:/var/lib/chronograf
+    restart: unless-stopped  
+    environment:
+      - influxdb-url=http://influxdb:8086    
+    depends_on:
+      - kapacitor
+      - influxdb
+      - telegraf

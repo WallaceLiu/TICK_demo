@@ -1,0 +1,15 @@
+var slack_channel = '#kapacitoralerts'
+var period = 30d
+batch
+    |query('''SELECT count(files) as hb FROM "asgbackup"."autogen"."drive_info" ORDER BY DESC LIMIT 1''')
+     .period(period)
+     .every(25s)
+     .groupBy('target')
+    |alert()
+	   .id('kapacitor/{{ .TaskName }}/{{ .Name }}/{{ .Group }}')
+           .message('{{ .ID }} is the level {{ .Level }}: BackupStatus: MISSING FOR LAST 3 DAYS')
+           .crit(lambda: "hb" <= 2)
+           .slack()
+           .channel(slack_channel)
+           .log('/var/tmp/kapacitor/points.log')
+

@@ -1,0 +1,19 @@
+var measurement string
+var where_filter = lambda: TRUE
+var group = [*]
+var crit lambda
+var alert_topic = 'events'
+var details = ''
+var message='{{ .ID }} of {{.TaskName}} is {{ .Level }}'
+
+stream
+  |from()
+    .measurement(measurement)
+    .where(where_filter)
+    .groupBy(group)
+  |alert()
+    .stateChangesOnly()
+    .crit(crit)
+    .details(details)
+    .message(message)
+    .topic(alert_topic)

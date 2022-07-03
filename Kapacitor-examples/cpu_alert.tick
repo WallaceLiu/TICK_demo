@@ -1,0 +1,27 @@
+var period = 5s
+var every = 5s
+
+var data = stream
+  |from()
+    .measurement('cpu')
+    .groupBy('host')
+    .where(lambda: "cpu" == 'cpu-total')
+  |window()
+    .period(period)
+    .every(every)
+  |mean('usage_user')
+    .as('stat')
+// Thresholds
+var alert = data
+  |alert()
+    //.id('{{ index .Tags "host"}}/cpu_used')
+    //.message('{{ .ID }}:{{ index .Fields "stat" }}')
+    //.info(lambda: TRUE)
+    .info(lambda: "stat" > 70)
+    .warn(lambda: "stat" > 80)
+    .crit(lambda: "stat" > 90)
+    
+// Alert
+alert
+  .log('/tmp/cpu_alert_log.txt')
+  //.email()

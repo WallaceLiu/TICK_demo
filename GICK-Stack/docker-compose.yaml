@@ -1,0 +1,92 @@
+version: "3.7"
+
+services:
+    influxdb:
+        image: influxdb:latest
+        ports:
+            - 8086:8086
+        volumes:
+            - influxdb:/var/lib/influxdb
+        networks:
+            - influx
+        hostname: influxdb
+
+    chronograf:
+        image: chronograf:latest
+        environment:
+            INFLUXDB_URL: http://influxdb:8086
+            KAPACITOR_URL: http://kapacitor:9092
+            HOST: "::"
+        ports: 
+            - 8888:8888
+        links:
+            - influxdb
+            - kapacitor
+        networks:
+            - influx
+        hostname: chronograf
+        volumes:
+            - chronograf:/var/lib/chronograf
+    
+    kapacitor:
+        image: kapacitor:master
+        build:
+            context: ./kapacitor
+
+        environment:
+            KAPACITOR_HOSTNAME: kapacitor
+            KAPACITOR_INFLUXDB_0_URLS_0: http://influxdb:8086
+        links:
+            - influxdb
+        ports:
+            - 9092:9092
+        networks:
+            - influx
+        hostname: kapacitor
+        volumes: 
+            - kapacitor:/var/lib/kapacitor
+        configs:
+            - source: kapacitor.conf
+              target: /etc/kapacitor/kapacitor.conf
+              
+    grafana:
+        image: grafana/grafana:latest
+        ports:
+            - 3000:3000
+        links:
+            - influxdb
+            - kapacitor
+        networks:
+            - influx
+        hostname: grafana
+        volumes:
+            - grafana:/var/lib/grafana
+            - /var/lib/grafana/plugins:/var/lib/grafana/plugins
+
+    mqtt:
+        image: eclipse-mosquitto:latest
+        ports: 
+            - 1883:1883
+            - 9001:9001
+        networks:
+            - influx
+        hostname: mqtt
+        volumes:
+            - mqtt_data:/mosquitto/data
+            - mqtt_log:/mosquitto/log
+            - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+
+
+networks:
+    influx:
+
+volumes:
+    influxdb:
+    chronograf:
+    kapacitor:
+    grafana:
+    mqtt_data:
+    mqtt_log:
+configs:
+    kapacitor.conf:
+        file: ./kapacitor.conf

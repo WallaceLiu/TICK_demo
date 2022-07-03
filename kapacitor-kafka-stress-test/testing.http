@@ -1,0 +1,74 @@
+###
+# Start a scenario that iterates 10 times over the given measurement->field->values
+
+POST http://localhost:8080/api/scenarios
+Content-Type: application/json
+
+{
+  "repeat": 30,
+  "interval": 1,
+  "taskDefinition": {
+    "measurement": "m-0",
+    "critExpression": "\"f-0\" > 2"
+  },
+  "input": {
+    "measurements": {
+      "m-0": {
+        "fieldValues": {
+          "f-0": [
+            {
+              "value": 1
+            },
+            {
+              "value": 3
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+###
+# And another with m-1
+
+POST http://localhost:8080/api/scenarios
+Content-Type: application/json
+
+{
+  "repeat": 30,
+  "interval": 1,
+  "taskDefinition": {
+    "measurement": "m-1",
+    "critExpression": "\"f-0\" > 10"
+  },
+  "input": {
+    "measurements": {
+      "m-1": {
+        "fieldValues": {
+          "f-0": [
+            {
+              "value": 9
+            },
+            {
+              "value": 11
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+
+###
+# Delete (and stop) all scenarios
+
+DELETE http://localhost:8080/api/scenarios
+
+###
+# Get counts of consumed events list per scenario, resource, measurement
+
+GET http://localhost:8080/api/consumer/counts
+
+###
