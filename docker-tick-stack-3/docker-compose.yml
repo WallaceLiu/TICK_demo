@@ -10,6 +10,7 @@ services:
     - 8186:8186
     - 8092:8092
     - 8094:8094/udp
+
   influxdb:
     image: influxdb
     hostname: tick_influx
@@ -18,6 +19,7 @@ services:
       target: /etc/influxdb/influxdb.conf
     volumes:
       - influx_volume:/var/lib/influxdb
+
   chronograf:
     image: chronograf
     hostname: tick_chronograf
@@ -26,6 +28,7 @@ services:
     command: ["chronograf", "--influxdb-url=http://influxdb:8086"]
     volumes:
       - chrono_volume:/var/lib/chronograf
+
   kapacitor:
     image: kapacitor
     hostname: tick_kapacitor
