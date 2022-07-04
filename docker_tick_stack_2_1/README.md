@@ -58,3 +58,6 @@ admin    true
 apt-get update && apt-get install -y procps && apt-get install -y vim
 ```
 
+4. 设置kapacitor
+首先，kapacitor.conf配置文件中的用户名和密码，以为没有设置，所以一会设置kapacitor时也不需要
+然后，进入到 localhost:8888，左侧点击configuration，在此配置kapacitor，它的端口是9092
