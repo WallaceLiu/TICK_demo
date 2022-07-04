@@ -45,7 +45,7 @@ _internal
 telegraf
 >  create user "admin" with password 'admin' with all privileges
 >  create user "telegraf" with password 'telegraf'
->  show users;
+>  show users
 user     admin
 ----     -----
 telegraf false
